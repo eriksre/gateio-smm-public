@@ -112,6 +112,36 @@ class PostGateio:
             return await response.json()
         
 
+    # async def create_order_batch(self, orders_data: list):
+    #     if len(orders_data) > 20:
+    #         raise ValueError("Can only create up to 20 orders in a batch")
+
+    #     url = self.post_links.create_order_batch
+    #     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+
+    #     orders = [self.create_order_payload(**order) for order in orders_data]
+    #     payload = json.dumps(orders)
+    #     sign_headers = self.auth.gen_sign('POST', url, '', payload)
+    #     headers.update(sign_headers)
+
+    #     async with self.session.post(f"{self.base_url}{url}", headers=headers, data=payload) as response:
+    #         raw_response = await response.json()
+    #         processed_response = []
+    #         for order in raw_response:
+    #             if order.get('succeeded', False):
+    #                 processed_response.append({
+    #                     'contract': order['contract'],
+    #                     'size': order['size'],
+    #                     'price': order['price'],
+    #                     'side': 'buy' if float(order['size']) > 0 else 'sell',
+    #                     'text': order['text'],
+    #                     'order_id': order['id']
+    #                 })
+    #             else:
+    #                 raise Exception(f"Order creation failed: {order}")
+    #         return processed_response
+        
+
     async def cancel_order_batch(self, order_ids: list):
         if len(order_ids) > 20:
             raise ValueError("Can only cancel up to 20 orders in a batch")
@@ -130,36 +160,38 @@ class PostGateio:
 
 
 # Used for testing
+# async def main():
+#     async with PostGateio() as gateio:
+#         # Test batch order cancellation
+#         order_ids = ["502468244728", "502468244723", "502468165203", "502468165201"]  # Replace with actual order IDs
+#         result = await gateio.cancel_order_batch(order_ids)
+#         print("Batch order cancellation result:", result)
+
+# if __name__ == "__main__":
+#     asyncio.run(main())
+
+# Main script for testing
 async def main():
     async with PostGateio() as gateio:
-        # Test batch order cancellation
-        order_ids = ["502468244728", "502468244723", "502468165203", "502468165201"]  # Replace with actual order IDs
-        result = await gateio.cancel_order_batch(order_ids)
-        print("Batch order cancellation result:", result)
+        # Test batch order creation
+        create_orders_data = [
+            {"contract": "BTC_USDT", "size": 1, "price": "55000", "side": "buy", "text": "t-my-custom-id-1"},
+            {"contract": "BTC_USDT", "size": -1, "price": "65000", "side": "sell", "text": "t-my-custom-id-2"}
+        ]
+        create_result = await gateio.create_order_batch(create_orders_data)
+        print("Batch order creation result:", create_result)
+
+        # # Extract order IDs from the creation result (assuming the API returns them)
+        # order_ids = [order['id'] for order in create_result if 'id' in order]
+
+        # # Test batch order cancellation
+        # if order_ids:
+        #     cancel_result = await gateio.cancel_orders_batch(order_ids)
+        #     print("Batch order cancellation result:", cancel_result)
+        # else:
+        #     print("No orders to cancel")
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-# Main script for testing
-# async def main():
-#     async with PostGateio() as gateio:
-#         # Test batch order creation
-#         create_orders_data = [
-#             {"contract": "BTC_USDT", "size": 10, "price": "60000", "side": "buy", "text": "t-my-custom-id-1"},
-#             {"contract": "BTC_USDT", "size": -10, "price": "70000", "side": "sell", "text": "t-my-custom-id-2"}
-#         ]
-#         create_result = await gateio.create_order_batch(create_orders_data)
-#         print("Batch order creation result:", create_result)
-
-#         # # Extract order IDs from the creation result (assuming the API returns them)
-#         # order_ids = [order['id'] for order in create_result if 'id' in order]
-
-#         # # Test batch order cancellation
-#         # if order_ids:
-#         #     cancel_result = await gateio.cancel_orders_batch(order_ids)
-#         #     print("Batch order cancellation result:", cancel_result)
-#         # else:
-#         #     print("No orders to cancel")
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
+# Batch order creation result: [{'refu': 0, 'tkfr': '0.00048', 'mkfr': '0.0002', 'contract': 'BTC_USDT', 'id': 511490407262, 'price': '55000', 'tif': 'gtc', 'iceberg': 0, 'text': 't-my-custom-id-1', 'user': 14678126, 'is_reduce_only': False, 'is_close': False, 'is_liq': False, 'fill_price': '0', 'create_time': 1722755162.057, 'update_time': 1722755162.057, 'status': 'open', 'left': 1, 'refr': '0', 'size': 1, 'biz_info': '-', 'amend_text': '-', 'stp_act': '-', 'stp_id': 0, 'succeeded': True, 'update_id': 1, 'pnl': '0', 'pnl_margin': '0'}, {'refu': 0, 'tkfr': '0.00048', 'mkfr': '0.0002', 'contract': 'BTC_USDT', 'id': 511490407265, 'price': '65000', 'tif': 'gtc', 'iceberg': 0, 'text': 't-my-custom-id-2', 'user': 14678126, 'is_reduce_only': False, 'is_close': False, 'is_liq': False, 'fill_price': '0', 'create_time': 1722755162.057, 'update_time': 1722755162.057, 'status': 'open', 'left': -1, 'refr': '0', 'size': -1, 'biz_info': '-', 'amend_text': '-', 'stp_act': '-', 'stp_id': 0, 'succeeded': True, 'update_id': 1, 'pnl': '0', 'pnl_margin': '0'}]

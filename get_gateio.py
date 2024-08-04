@@ -44,7 +44,8 @@ class GetGateio:
         headers.update(sign_headers)
 
         async with self.session.get(f"{self.base_endpoint.get}{url}", headers=headers) as response:
-            return await response.json()
+            response_json = await response.json()
+            return [[entry['contract'], entry['size']] for entry in response_json]
 
     async def get_futures_tickers(self):
         url = f"{self.base_endpoint.get}{self.get_links.futures_tickers}"
@@ -70,8 +71,11 @@ class GetGateio:
 # Used for testing
 async def main():
     async with GetGateio() as gateio:
-        futures_tickers = await gateio.get_open_orders("BTC_USDT")
-        print(futures_tickers)
+        # futures_tickers = await gateio.get_open_orders("BTC_USDT")
+        # print(futures_tickers)
+
+        current_positions = await gateio.get_positions()
+        print(current_positions)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -87,3 +91,5 @@ if __name__ == "__main__":
 
 # [{'value': '28.5993', 'leverage': '0', 'mode': 'single', 'realised_point': '0', 'contract': 'BTC_USDT', 'entry_price': '57141.8', 'mark_price': '57198.6', 'history_point': '0', 'realised_pnl': '-0.013714032', 'close_order': None, 'size': 5, 'cross_leverage_limit': '10', 'pending_orders': 0, 'adl_ranking': 5, 'maintenance_rate': '0.004', 'unrealised_pnl': '0.0284', 'pnl_pnl': '0', 'pnl_fee': '-0.013714032', 'pnl_fund': '0', 'user': 14678126, 'leverage_max': '125', 'history_pnl': '0', 'risk_limit': '1000000', 'margin': '46.87680406619', 'last_close_pnl': '0', 'liq_price': '0', 'update_time': 1720783541, 'update_id': 1, 'initial_margin': '0', 'maintenance_margin': '0', 'open_time': 1720783541, 'trade_max_size': '0'}, 
 #  {'value': '30.7187', 'leverage': '0', 'mode': 'single', 'realised_point': '0', 'contract': 'ETH_USDT', 'entry_price': '3071.7', 'mark_price': '3071.87', 'history_point': '0', 'realised_pnl': '-0.01474416', 'close_order': None, 'size': 1, 'cross_leverage_limit': '10', 'pending_orders': 0, 'adl_ranking': 5, 'maintenance_rate': '0.005', 'unrealised_pnl': '0.0017', 'pnl_pnl': '0', 'pnl_fee': '-0.01474416', 'pnl_fund': '0', 'user': 14678126, 'leverage_max': '100', 'history_pnl': '0', 'risk_limit': '1000000', 'margin': '47.09302364119', 'last_close_pnl': '0', 'liq_price': '0', 'update_time': 1720783653, 'update_id': 1, 'initial_margin': '0', 'maintenance_margin': '0', 'open_time': 1720783653, 'trade_max_size': '0'}]
+
+[{'value': '0', 'leverage': '0', 'mode': 'single', 'realised_point': '0', 'contract': 'BTC_USDT', 'entry_price': '0', 'mark_price': '60792.47', 'history_point': '0', 'realised_pnl': '0', 'close_order': None, 'size': 0, 'cross_leverage_limit': '10', 'pending_orders': 0, 'adl_ranking': 6, 'maintenance_rate': '0.004', 'unrealised_pnl': '0', 'pnl_pnl': '0', 'pnl_fee': '0', 'pnl_fund': '0', 'user': 14678126, 'leverage_max': '125', 'history_pnl': '5.265599075704', 'risk_limit': '1000000', 'margin': '0', 'last_close_pnl': '-0.005834344', 'liq_price': '0', 'update_time': 1722765089, 'update_id': 9, 'initial_margin': '0', 'maintenance_margin': '0', 'open_time': 0, 'trade_max_size': '0'}, {'value': '29.112', 'leverage': '0', 'mode': 'single', 'realised_point': '0', 'contract': 'ETH_USDT', 'entry_price': '3071.7', 'mark_price': '2911.2', 'history_point': '0', 'realised_pnl': '-0.1605438148', 'close_order': None, 'size': 1, 'cross_leverage_limit': '10', 'pending_orders': 0, 'adl_ranking': 5, 'maintenance_rate': '0.005', 'unrealised_pnl': '-1.605', 'pnl_pnl': '0', 'pnl_fee': '-0.01474416', 'pnl_fund': '-0.1457996548', 'user': 14678126, 'leverage_max': '100', 'history_pnl': '0', 'risk_limit': '1000000', 'margin': '55.105055269094', 'last_close_pnl': '0', 'liq_price': '0', 'update_time': 1722762289, 'update_id': 1, 'initial_margin': '0', 'maintenance_margin': '0', 'open_time': 1720783653, 'trade_max_size': '0'}]

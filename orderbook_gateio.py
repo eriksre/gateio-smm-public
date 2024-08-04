@@ -2,7 +2,7 @@ import asyncio
 import numpy as np
 from typing import Dict, Any, List, Callable
 from baseorderbook import Orderbook
-from flat_structure.ws_gateio import WSGateio
+from ws_gateio import WSGateio
 from get_gateio import GetGateio
 
 class OrderbookGateio:

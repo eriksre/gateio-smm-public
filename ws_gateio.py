@@ -156,6 +156,8 @@ class WSGateio:
     def get_sign(self, message: str) -> str:
         return hmac.new(self.api_secret.encode("utf8"), message.encode("utf8"), hashlib.sha512).hexdigest()
 
+
+
     async def subscribe_user_trades(self):
         ws_url = self.base_endpoint.ws
         current_time = int(time.time())
@@ -174,11 +176,17 @@ class WSGateio:
         async with websockets.connect(ws_url) as websocket:
             await websocket.send(orjson.dumps(subscription))
             while True:
-                message = await websocket.recv()
-                if self.message_callback:
-                    self.message_callback(orjson.loads(message))
-                else:
-                    print(f"Received user trade update: {message}")
+                message = orjson.loads(await websocket.recv())
+                if message.get("event") == "subscribe":
+                    print("Subscribed to User Trades")
+                elif message.get("event") == "update":
+                    if self.message_callback:
+                        await self.message_callback(message)
+                    else:
+                        contracts_and_sizes = [[item["contract"], float(item["size"])] for item in message.get("result", [])]
+                        print(f"User trade update: {contracts_and_sizes}")
+
+
 
     async def subscribe_user_orders(self):
         ws_url = self.base_endpoint.ws
@@ -232,13 +240,13 @@ async def main():
     gate_ws = WSGateio()
     
     # Add subscriptions for orderbook
-    gate_ws.add_orderbook_subscription("BTC_USDT")
+    # gate_ws.add_orderbook_subscription("BTC_USDT")
     #gate_ws.add_orderbook_subscription("ETH_USDT")
 
     # Create tasks for all subscriptions
-    orderbook_task = asyncio.create_task(gate_ws.subscribe_orderbooks())
+    # orderbook_task = asyncio.create_task(gate_ws.subscribe_orderbooks())
     #user_orders_task = asyncio.create_task(gate_ws.subscribe_user_orders())
-    #user_trades_task = asyncio.create_task(gate_ws.subscribe_user_trades())
+    user_trades_task = asyncio.create_task(gate_ws.subscribe_user_trades())
     #public_trades_task = asyncio.create_task(gate_ws.subscribe_public_trades("BTC_USDT"))
     #public_trades_task2 = asyncio.create_task(gate_ws.subscribe_public_trades("ETH_USDT"))
     #user_balances = asyncio.create_task(gate_ws.subscribe_user_balances())
@@ -247,7 +255,7 @@ async def main():
 
     # Wait for all tasks to complete
     await asyncio.gather(
-        orderbook_task
+        user_trades_task
     )
 
 if __name__ == "__main__":
