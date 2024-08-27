@@ -4,6 +4,10 @@ from oms_gateio import OrderManagerGateio
 from order_submission_gateio import OrderSubmissionGateio
 from quote_gen_gateio import QuoteGenerator
 from typing import List
+"""
+generates quotes each time the book updates and does NOT submit orders.
+
+"""
 
 class TradingExecutor:
     def __init__(self, order_submission: OrderSubmissionGateio, quote_generator: QuoteGenerator):

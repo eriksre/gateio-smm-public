@@ -79,8 +79,9 @@ class OrderSubmissionGateio:
                             print(f"Retry failed for order ID: {order['order_id']}. Error: {str(retry_error)}")
                         retry_count += 1
                     
-                    if retry_count == max_retries:
-                        raise RuntimeError(f"Order cancellation failed after {max_retries} attempts for order ID: {order['order_id']}")
+                    # will cause issues if an order is already filled???
+                    # if retry_count == max_retries:
+                    #     raise RuntimeError(f"Order cancellation failed after {max_retries} attempts for order ID: {order['order_id']}")
 
             # Update order manager
             self.order_manager.cancel_orders(order_ids)
