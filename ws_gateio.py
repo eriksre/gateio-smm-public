@@ -240,13 +240,13 @@ async def main():
     gate_ws = WSGateio()
     
     # Add subscriptions for orderbook
-    # gate_ws.add_orderbook_subscription("BTC_USDT")
-    #gate_ws.add_orderbook_subscription("ETH_USDT")
+    gate_ws.add_orderbook_subscription("BTC_USDT")
+    gate_ws.add_orderbook_subscription("ETH_USDT")
 
     # Create tasks for all subscriptions
-    # orderbook_task = asyncio.create_task(gate_ws.subscribe_orderbooks())
+    orderbook_task = asyncio.create_task(gate_ws.subscribe_orderbooks())
     #user_orders_task = asyncio.create_task(gate_ws.subscribe_user_orders())
-    user_trades_task = asyncio.create_task(gate_ws.subscribe_user_trades())
+    # user_trades_task = asyncio.create_task(gate_ws.subscribe_user_trades())
     #public_trades_task = asyncio.create_task(gate_ws.subscribe_public_trades("BTC_USDT"))
     #public_trades_task2 = asyncio.create_task(gate_ws.subscribe_public_trades("ETH_USDT"))
     #user_balances = asyncio.create_task(gate_ws.subscribe_user_balances())
@@ -255,7 +255,7 @@ async def main():
 
     # Wait for all tasks to complete
     await asyncio.gather(
-        user_trades_task
+        orderbook_task
     )
 
 if __name__ == "__main__":

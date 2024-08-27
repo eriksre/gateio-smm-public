@@ -14,7 +14,7 @@ class GetLinks:
 
 @dataclass
 class PostLinks:
-    cancel_all_open_orders = "/api/v4/futures/usdt/price_orders"
+    cancel_all_open_orders = "/api/v4/futures/usdt/price_orders" #can't get this to work
     cancel_order_batch = "/api/v4/futures/usdt/batch_cancel_orders"
     cancel_single_order = "/api/v4/futures/usdt/orders/{order_id}"
     cancel_order_batch = "/api/v4/futures/usdt/batch_cancel_orders"

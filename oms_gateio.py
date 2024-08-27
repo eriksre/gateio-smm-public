@@ -1,116 +1,80 @@
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 from datetime import datetime
-
-@dataclass
-class Order:
-    order_id: str
-    contract: str
-    price: float
-    quantity: float
-    side: str
-    creation_time: datetime
-    status: str = "open"
+import uuid
 
 class OrderManagerGateio:
     def __init__(self):
-        self.live_orders: Dict[str, Order] = {}
+        self.pending_orders: Dict[str, Dict] = {}
+        self.live_orders: Dict[str, Dict] = {}
+        self.cancelled_orders: Dict[str, Dict] = {}
+        self.filled_orders: Dict[str, Dict] = {}
 
-    def add_orders(self, orders: List[Dict]) -> None:
-        """
-        Add new orders to the live orders dictionary.
+
+    def create_order(self, order_data: Dict) -> str:
+        internal_id = str(uuid.uuid4())
+        order = {
+            'order_id': None,
+            'internal_id': internal_id,
+            'internal_creation_time': float(datetime.now().timestamp()),
+            'internal_status': 'pending',
+            'contract': order_data['contract'],
+            'price': float(order_data['price']),
+            'quantity': float(order_data['size']),
+            'side': order_data['side'],
+            'text': order_data['text'],
+            'exchange_creation_time': None,
+            'refu': None,
+            'status': None
+        }
+        self.pending_orders[internal_id] = order
+        return internal_id
+
+    def create_orders_from_list(self, orders_data: List[Dict]) -> List[str]:
+        return [self.create_order(order_data) for order_data in orders_data]
+
+    def update_order_with_exchange_details(self, internal_id: str, exchange_order: Dict):
+        if internal_id in self.pending_orders:
+            order = self.pending_orders.pop(internal_id)
+            order['order_id'] = str(exchange_order['id'])
+            order['exchange_creation_time'] = exchange_order['create_time']
+            order['refu'] = bool(exchange_order['refu'])
+            order['status'] = exchange_order['status']
+            order['internal_status'] = 'live'
+            self.live_orders[order['order_id']] = order
+
+    def update_order_after_lifecycle(self, internal_id: str):
+        if internal_id in self.live_orders:
+            order = self.live_orders.pop(internal_id)
+
+
+    def get_live_orders(self, text: Optional[str] = None, contract: Optional[str] = None) -> List[Dict]:
+        filtered_orders = self.live_orders.values()
         
-        :param orders: List of order dictionaries returned from the exchange
-        """
-        for order_dict in orders:
-            order_id = order_dict['order_id']
-            self.live_orders[order_id] = Order(
-                order_id=order_id,
-                contract=order_dict['contract'],
-                price=float(order_dict['price']),
-                quantity=float(order_dict['size']),
-                side=order_dict['side'],
-                creation_time=datetime.now(),
-                status=order_dict['status']
-            )
-        # print("Orders added to OrderManager:")
-        # for order in self.live_orders.values():
-        #     print(order)
-
-    def remove_orders(self, order_ids: List[str]) -> None:
-        """
-        Remove orders from the live orders dictionary.
+        if text:
+            filtered_orders = [order for order in filtered_orders if order['text'] == text]
         
-        :param order_ids: List of order IDs to remove
-        """
-        for order_id in order_ids:
-            self.live_orders.pop(order_id, None)
-
-    def update_order_status(self, order_id: str, new_status: str) -> None:
-        if order_id in self.live_orders:
-            self.live_orders[order_id].status = new_status
-
-    def get_live_orders(self) -> Dict[str, Dict]:
-        """
-        Get all live orders as dictionaries.
+        if contract:
+            filtered_orders = [order for order in filtered_orders if order['contract'] == contract]
         
-        :return: Dictionary of live orders
-        """
-        return {order_id: self._order_to_dict(order) for order_id, order in self.live_orders.items()}
-
-    def get_live_orders_by_contract(self, contract: str) -> List[Dict]:
-        """
-        Get live orders for a specific contract as dictionaries.
-        
-        :param contract: Contract symbol
-        :return: List of live orders for the specified contract
-        """
-        return [self._order_to_dict(order) for order in self.live_orders.values() if order.contract == contract]
+        return list(filtered_orders)
 
     def get_order(self, order_id: str) -> Optional[Dict]:
-        """
-        Get a specific order by its ID as a dictionary.
-        
-        :param order_id: ID of the order to retrieve
-        :return: Order dictionary if found, None otherwise
-        """
-        order = self.live_orders.get(order_id)
-        return self._order_to_dict(order) if order else None
+        return self.live_orders.get(order_id)
+    
 
-    @staticmethod
-    def _order_to_dict(order: Order) -> Dict:
-        """
-        Convert an Order object to a dictionary.
-        """
-        return {
-            'order_id': order.order_id,
-            'contract': order.contract,
-            'price': order.price,
-            'size': order.quantity,
-            'side': order.side,
-            'creation_time': order.creation_time.isoformat(),
-            'status': order.status
-        }
-# Example usage:
-# order_manager = OrderManagerGateio()
-# 
-# # Add new orders
-# new_orders = [
-#     {'order_id': '1', 'contract': 'BTC_USDT', 'price': '50000', 'size': '0.1', 'side': 'buy'},
-#     {'order_id': '2', 'contract': 'ETH_USDT', 'price': '3000', 'size': '1', 'side': 'sell'}
-# ]
-# order_manager.add_orders(new_orders)
-# 
-# # Get live orders
-# live_orders = order_manager.get_live_orders()
-# print(live_orders)
-# 
-# # Update order status
-# order_manager.update_order_status('1', 'filled')
-# 
-# # Remove an order
-# order_manager.remove_orders(['2'])
-# 
-# # Get orders for a specific contract
-# btc_orders = order_manager.get_live_orders_by_contract('BTC_USDT')
-# print(btc_orders)
+    def cancel_orders(self, order_ids: List[str]):
+        for order_id in order_ids:
+            if order_id in self.live_orders:
+                order = self.live_orders.pop(order_id)
+                order['internal_status'] = 'cancelled'
+                order['status'] = 'cancelled'
+                #self.cancelled_orders[order_id] = order
+                print("uncomment line 71 oms_gateio.py file when running this properly. this to keep ram usage low, otherwise cancelled orders pile in memory")
+            else:
+                print(f"Order ID {order_id} not found in live orders.")
+
+
+
+
+
+

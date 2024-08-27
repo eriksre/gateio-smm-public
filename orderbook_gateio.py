@@ -18,6 +18,7 @@ class OrderbookGateio:
         self.running = False
         self.on_update_callback = None
 
+
     async def initialize_orderbooks(self) -> None:
         self.ws_gateio.message_callback = self.process_ws_message
         for contract in self.contracts:
@@ -37,6 +38,7 @@ class OrderbookGateio:
             print(f"Orderbook for {contract} initialized successfully")
             await self.apply_updates(contract)
 
+
     def process_ws_message(self, data: Dict[str, Any]) -> None:
         if 'result' in data and isinstance(data['result'], dict):
             update = data['result']
@@ -46,6 +48,7 @@ class OrderbookGateio:
                     asyncio.create_task(self.apply_single_update(contract, update))
                 else:
                     self.cached_updates[contract].append(update)
+
 
     def process_ob_snapshot(self, contract: str, data: Dict[str, Any]) -> None:
         if isinstance(data, dict) and 'asks' in data and 'bids' in data:
@@ -58,10 +61,12 @@ class OrderbookGateio:
         else:
             raise ValueError(f"Unexpected orderbook snapshot data structure for {contract}")
 
+
     async def apply_updates(self, contract: str) -> None:
         for update in self.cached_updates[contract]:
             await self.apply_single_update(contract, update)
         self.cached_updates[contract].clear()
+
 
     async def apply_single_update(self, contract: str, update: Dict[str, Any]) -> None:
         try:
@@ -98,6 +103,7 @@ class OrderbookGateio:
     def extract_obid(data: Dict[str, Any]) -> int:
         return int(data.get('id', 0))
 
+
     async def reconstruct_orderbook(self, contract: str) -> None:
         self.cached_updates[contract].clear()
         self.is_initialized[contract] = False
@@ -107,11 +113,13 @@ class OrderbookGateio:
         self.is_initialized[contract] = True
         await self.apply_updates(contract)
 
+
     async def run(self) -> None:
         self.running = True
         await self.initialize_orderbooks()
         while self.running:
             await asyncio.sleep(1)
+
 
     async def cleanup(self) -> None:
         print("Cleaning up OrderbookGateio...")
@@ -119,6 +127,8 @@ class OrderbookGateio:
         if hasattr(self.ws_gateio, 'cleanup'):
             await self.ws_gateio.cleanup()
         print("OrderbookGateio cleanup completed")
+
+
 
 def print_orderbook(contract: str, bids: np.ndarray, asks: np.ndarray):
     print(f"\nOrderbook Update for {contract}:")
@@ -131,7 +141,7 @@ def print_orderbook(contract: str, bids: np.ndarray, asks: np.ndarray):
     print("-" * 40)
 
 async def main():
-    contracts = ["BTC_USDT"]
+    contracts = ["POPCAT_USDT"]
     orderbook_manager = OrderbookGateio(contracts=contracts, size=20)
     orderbook_manager.on_update_callback = print_orderbook
 
