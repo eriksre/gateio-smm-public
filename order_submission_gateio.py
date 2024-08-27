@@ -1,14 +1,12 @@
 import asyncio
 from typing import List, Dict, Optional, Tuple
 from post_gateio import PostGateio
-from oms_gateio import OrderManagerGateio, Order
-from datetime import datetime
-# from order_logger import OrderLogger 
+from oms_gateio import OrderManagerGateio
 
 
-"""
-class combines post, order manager, and order logger so that positions and orders can be kept track of
-"""
+
+from post_gateio import PostGateio
+import asyncio
 
 
 class OrderSubmissionGateio:
@@ -24,198 +22,169 @@ class OrderSubmissionGateio:
     async def __aexit__(self, exc_type, exc, tb):
         await self.post_gateio.__aexit__(exc_type, exc, tb)
 
-    def _process_created_orders(self, created_orders: List[Dict]) -> List[Dict]:
-        """
-        Returns a list of dictionaries containing orders with strategy tags.
-        """
-        processed_orders = []
-        for order in created_orders:
-            processed_order = {
-                'order_id': str(order['id']),
-                'contract': order['contract'],
-                'price': order['price'],
-                'size': order['size'],
-                'side': order['side'],
-                'status': order['status'],
-                'strategy': order.get('strategy', '')  # Get strategy directly from the order
-            }
-        return processed_orders
-
-    def _extract_strategy(self, order: Dict) -> Tuple[Dict, str]:
-        strategy = order.pop('strategy', '')
-        return order, strategy
-
-
-    """
-    re-do the logic on this wait for confirmation method
-    essentially, in the internal oms, don't have a delay or wait for confirmation, but as soon as the 
-    order has been inserted into the oms, then can run operations like cancel and whatnot. until then, this function has not finished executing
-    thought - does this mean this needs to not be an async method?
-    ############################################
-    
-    """
-    async def _wait_for_orders_confirmation(self, orders: List[Dict]):
-        """
-        waits for orders to be 
-        """
-        while True:
-            all_confirmed = True
-            for order in orders:
-                if order['order_id'] not in self.order_manager.live_orders:
-                    all_confirmed = False
-                    break
-            
-            if all_confirmed:
-                return
-            
-            # await asyncio.sleep(0) yields control back to the event loop,
-            # allowing other coroutines to run. It's essentially a way to
-            # cooperatively multitask without blocking the entire program.
-            # This prevents the while loop from hogging all the CPU time.
-            await asyncio.sleep(0)
-
-
-
-    async def submit_bulk_orders(self, orders_data: List[Dict]) -> List[Order]:
+    async def submit_bulk_orders(self, orders_data: List[Dict]) -> List[Dict]:
         if not self.session:
             raise RuntimeError("Session not initialized. Use 'async with' to create OrderSubmissionGateio instance.")
         
         try:
-            exchange_orders, strategies = zip(*[self._extract_strategy(order) for order in orders_data])
-            
-            created_orders = await self.post_gateio.create_order_batch(exchange_orders)
+            # Create pending orders in the order manager
+            internal_ids = self.order_manager.create_orders_from_list(orders_data)
 
+            # Submit orders to the exchange
+            exchange_submission = await self.post_gateio.create_order_batch(orders_data)
 
-            # add strategy param to given order in order manager logic
-            for created_order, strategy in zip(created_orders, strategies):
-                created_order['strategy'] = strategy
-            
-            processed_orders = self._process_created_orders(created_orders)
-            self.order_manager.add_orders(processed_orders)
+            # Process the exchange response and update order manager
+            submitted_orders = []
+            for internal_id, exchange_order in zip(internal_ids, exchange_submission):
+                if exchange_order.get('status') == 'open':
+                    self.order_manager.update_order_with_exchange_details(internal_id, exchange_order)
+                    submitted_order = self.order_manager.get_order(str(exchange_order['id']))
+                    if submitted_order:
+                        submitted_orders.append(submitted_order)
+                else:
+                    # Handle failed orders if necessary
+                    print(f"Order submission failed for internal ID: {internal_id}")
 
-            #await self._wait_for_orders_confirmation(processed_orders)
-            print(f"Processed orders: {processed_orders}")
+            return submitted_orders
 
-            return processed_orders
-        
         except Exception as e:
-            print(f"Error submitting bulk orders: {e}")
-            print(f"Orders data: {orders_data}")
-            print(f"Exchange orders: {exchange_orders}")
+            print(f"Error submitting bulk orders: {str(e)}")
+            return []
+        
+
+
+
+
+
+    async def cancel_bulk_orders(self, order_ids: List[str]) -> List[Dict]:
+        if not self.session:
+            raise RuntimeError("Session not initialized. Use 'async with' to create OrderSubmissionGateio instance.")
+        
+        try:
+            # Cancel orders on the exchange
+            cancellation_results = await self.post_gateio.cancel_order_batch(order_ids)
+            for order in cancellation_results:
+                if order['succeeded'] == 'False':
+                    retry_count = 0
+                    max_retries = 3
+                    while retry_count < max_retries:
+                        try:
+                            print(f"Retrying cancellation for order ID: {order['order_id']}. Attempt {retry_count + 1}")
+                            # Attempt to cancel the order again
+                            retry_result = await self.post_gateio.cancel_order(order['order_id'])
+                            if retry_result['succeeded'] == 'True':
+                                print(f"Retry successful for order ID: {order['order_id']}")
+                                break
+                        except Exception as retry_error:
+                            print(f"Retry failed for order ID: {order['order_id']}. Error: {str(retry_error)}")
+                        retry_count += 1
+                    
+                    if retry_count == max_retries:
+                        raise RuntimeError(f"Order cancellation failed after {max_retries} attempts for order ID: {order['order_id']}")
+
+            # Update order manager
+            self.order_manager.cancel_orders(order_ids)
+            return cancellation_results
+
+        except Exception as e:
+            print(f"Error cancelling bulk orders: {str(e)}")
             return []
 
 
-
-    async def cancel_orders_by_id(self, order_ids: List[str]) -> List[Dict]:
-        """
-        cancel by order id
-        """
+    async def cancel_orders_by_strategy(self, strategy: str) -> List[Dict]:
         if not self.session:
             raise RuntimeError("Session not initialized. Use 'async with' to create OrderSubmissionGateio instance.")
         
         try:
-            cancelled_orders = await self.post_gateio.cancel_order_batch(order_ids)
-            self.order_manager.remove_orders(order_ids)
-            self.order_manager.update_order_status(order_ids, "cancelled")
-            
-            # Log cancelled orders
-            # for order in cancelled_orders:
-            #     self.order_logger.log_order({**order, 'status': 'cancelled'})
-            
-            return cancelled_orders
-        except Exception as e:
-            print(f"Error cancelling bulk orders: {e}")
-            return []
-
-
-    async def cancel_orders_by_strategy_or_symbol(self, strategy: Optional[str] = None, symbol: Optional[str] = None) -> List[Dict]:
-        """
-        Cancel orders by strategy, symbol, or both. At least one of strategy or symbol must be provided.
-
-        :param strategy: Optional strategy name to cancel orders for
-        :param symbol: Optional symbol (contract) to cancel orders for
-        :return: List of cancelled orders
-        """
-        if not self.session:
-            raise RuntimeError("Session not initialized. Use 'async with' to create OrderSubmissionGateio instance.")
-        
-        if strategy is None and symbol is None:
-            raise ValueError("At least one of strategy or symbol must be provided")
-
-        try:
-            # Get live orders filtered by strategy and/or symbol
-            live_orders = self.order_manager.get_live_orders(strategy=strategy, contract=symbol)
+            # Get live orders filtered by strategy
+            live_orders = self.order_manager.get_live_orders(text=strategy)
             
             if not live_orders:
+                print(f"No live orders found for strategy: {strategy}")
                 return []
 
             order_ids = [order['order_id'] for order in live_orders]
             
             # Cancel the filtered orders
-            cancelled_orders = await self.post_gateio.cancel_order_batch(order_ids)
-            self.order_manager.update_order_status(order_ids, "cancelled")
-            
-            # Remove cancelled orders from the order manager
-            self.order_manager.remove_orders(order_ids)
-            
-            # Log cancelled orders
-            # for order in cancelled_orders:
-            #     self.order_logger.log_order({**order, 'status': 'cancelled'})
-            
+            cancelled_orders = await self.cancel_bulk_orders(order_ids)
             return cancelled_orders
+
         except Exception as e:
-            print(f"Error cancelling orders by strategy or symbol: {e}")
+            print(f"Error cancelling orders by strategy: {str(e)}")
             return []
 
-    def get_live_orders(self, strategy: Optional[str] = None, contract: Optional[str] = None) -> List[Dict]:
-        """
-        Get live orders filtered by strategy, contract, or both.
+
+
+    async def cancel_orders_by_contract(self, contract: str) -> List[Dict]:
+        if not self.session:
+            raise RuntimeError("Session not initialized. Use 'async with' to create OrderSubmissionGateio instance.")
         
-        :param strategy: Optional strategy name to filter orders
-        :param contract: Optional contract symbol to filter orders
-        :return: List of live orders matching the specified criteria
-        """
-        return self.order_manager.get_live_orders(strategy=strategy, contract=contract)
+        try:
+            # Get live orders filtered by contract
+            live_orders = self.order_manager.get_live_orders(contract=contract)
+            
+            if not live_orders:
+                print(f"No live orders found for contract: {contract}")
+                return []
+
+            order_ids = [order['order_id'] for order in live_orders]
+            
+            # Cancel the filtered orders
+            cancelled_orders = await self.cancel_bulk_orders(order_ids)
+            return cancelled_orders
+
+        except Exception as e:
+            print(f"Error cancelling orders by contract: {str(e)}")
+            return []
+
+
+    def get_live_orders(self, text: str = None, contract: str = None) -> List[Dict]:
+        return self.order_manager.get_live_orders(text, contract)
+
+    def get_order(self, order_id: str) -> Dict:
+        return self.order_manager.get_order(order_id)  
+
+    
+
+
+    
+
+# Example usage
+async def main():
+    async with OrderSubmissionGateio() as order_submission:
+        orders_to_submit = [
+            {
+                "contract": "BTC_USDT",
+                "size": "1",
+                "price": "50000",
+                "side": "buy",
+                "text": "t-example-1"
+            },
+            {
+                "contract": "ETH_USDT",
+                "size": "1",
+                "price": "2000",
+                "side": "buy",
+                "text": "t-example-2"
+            }
+        ]
+
+        import time
+        time1 = time.time()
+
+
+        submitted_orders = await order_submission.submit_bulk_orders(orders_to_submit)
+        print("Submitted orders:", submitted_orders)
+
+        cancelled_orders1 = await order_submission.cancel_orders_by_strategy("t-example-1")
+        cancelled_orders2 = await order_submission.cancel_orders_by_contract("ETH_USDT")
+
+        time2 = time.time()
+        print(f"time: {time2-time1}")
+
 
 
 if __name__ == "__main__":
-
-    async def main():
-        async with OrderSubmissionGateio() as order_submission:
-            # Create orders in bulk
-            orders_data = [
-                {
-                    "contract": "BTC_USDT",
-                    "size": 1,
-                    "price": 50000,
-                    "side": "buy",
-                    "text": "strategy_1"
-                },
-                {
-                    "contract": "ETH_USDT",
-                    "size": 1,
-                    "price": 2000,
-                    "side": "buy",
-                    "text": "t-strategy_2"
-                }
-            ]
-
-            created_orders = await order_submission.submit_bulk_orders(orders_data)
-            print("Created orders:", created_orders)
-
-
-            await asyncio.sleep(5)
-            # Cancel order by strategy
-            cancelled_by_strategy = await order_submission.cancel_orders_by_strategy_or_symbol(strategy="strategy_1")
-            print("Cancelled orders by strategy:", cancelled_by_strategy)
-
-            # # Cancel order by symbol
-            # cancelled_by_symbol = await order_submission.cancel_orders_by_strategy_or_symbol(symbol="ETH_USDT")
-            # print("Cancelled orders by symbol:", cancelled_by_symbol)
-
-            # # Check if any orders were actually cancelled
-            # if not cancelled_by_strategy and not cancelled_by_symbol:
-            #     print("Warning: No orders were cancelled. Check if the orders were created successfully.")
-
     asyncio.run(main())
+
 

@@ -128,33 +128,33 @@ class WSGateio:
         await self.subscribe_orderbooks()
 
     #open user orders
-    async def subscribe_user_orders(self):
-        ws_url = self.base_endpoint.ws
-        req = {
-            "time": int(time.time()),
-            "channel": self.ws_links.orders,
-            "event": "subscribe",
-            "payload": ["!all", "!all"],
-            "auth": {
-                "method": "api_key",
-                "KEY": self.api_key,
-                "SIGN": self.generate_signature()
-            }
-        }
-        async with websockets.connect(ws_url) as websocket:
-            await websocket.send(orjson.dumps(req))
-            response = await websocket.recv()
-            print(f"Subscription response: {response}")
+    # async def subscribe_user_orders(self):
+    #     ws_url = self.base_endpoint.ws
+    #     req = {
+    #         "time": int(time.time()),
+    #         "channel": self.ws_links.orders,
+    #         "event": "subscribe",
+    #         "payload": ["!all", "!all"],
+    #         "auth": {
+    #             "method": "api_key",
+    #             "KEY": self.api_key,
+    #             "SIGN": self.generate_signature()
+    #         }
+    #     }
+    #     async with websockets.connect(ws_url) as websocket:
+    #         await websocket.send(orjson.dumps(req))
+    #         response = await websocket.recv()
+    #         print(f"Subscription response: {response}")
             
-            while True:
-                message = await websocket.recv()
-                if self.message_callback:
-                    self.message_callback(orjson.loads(message))
-                else:
-                    print(f"Received order update: {message}")
+    #         while True:
+    #             message = await websocket.recv()
+    #             if self.message_callback:
+    #                 self.message_callback(orjson.loads(message))
+    #             else:
+    #                 print(f"Received order update: {message}")
 
-    def get_sign(self, message: str) -> str:
-        return hmac.new(self.api_secret.encode("utf8"), message.encode("utf8"), hashlib.sha512).hexdigest()
+    # def get_sign(self, message: str) -> str:
+    #     return hmac.new(self.api_secret.encode("utf8"), message.encode("utf8"), hashlib.sha512).hexdigest()
 
 
 
